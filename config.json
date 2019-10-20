@@ -1,4 +1,14 @@
 {
-	"eq_log_dir": "C:\\Users\\User\\Desktop\\school\\stuff\\EverQuest\\Logs"
-	
+    "general": {
+        "eq_log_dir": "C:\\Users\\User\\Desktop\\school\\stuff\\EverQuest\\Logs"
+    },
+    "spells": {
+        "geometry": [
+            550,
+            100,
+            200,
+            400
+        ],
+        "toggled": true
+    }
 }

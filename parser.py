@@ -3,12 +3,14 @@ import sys
 import datetime
 import json
 from glob import glob
-
+import config
+import parserwindow
 from PyQt5.QtCore import QFileSystemWatcher, pyqtSignal
+from PyQt5.QtWidgets import QApplication, QSystemTrayIcon
 
-data = {}
+
 config_file = r'config.json'
-
+config.load(config_file)
 
 def strip_timestamp(line):
     """
@@ -51,18 +53,23 @@ class LogReader(QFileSystemWatcher):
                 self.stats['last_read'] = log.tell()
 
 
-class EQParser:
+class EQParser(QApplication):
+    def __init__(self,*args):
+        super().__init__(*args)
+        self.toggled = False
+        self.log_reader = None
+        self.load_parser()
+        # Tray Icon
+        self.system_tray = QSystemTrayIcon()
 
-    def __init__(self):
-        self.load_config(config_file)
-        self.log_reader = LogReader(data['eq_log_dir'])
-        self.spellbook = create_spell_book()
 
-    def load_config(self,filename):
-        global data
-        file = filename
-        with open(file,'r+') as f:
-                data = json.loads(f.read())
+
+
+    def load_parser(self):
+        parser_window = parserwindow.ParserWindow()
+        g = config.data['spells']['geometry']
+        if config.data['spells']['toggled']:
+            parser_window.toggle()
 
 
 class Spell:
@@ -83,6 +90,16 @@ class Spell:
         self.type = 0
         self.spell_icon = 0
         self.__dict__.update(kwargs)
+
+
+def ParserWindow(QFrame):
+    def __init__(self):
+        super().__init__()
+        self.name = ''
+        self.setObjectName('ParserWindow')
+        self.setWindowOpacity(1)
+
+
 
 
 def create_spell_book():
@@ -115,6 +132,5 @@ def create_spell_book():
         return spellbook
 
 
-bruh = EQParser()
-print(bruh.log_reader.logfiles)
-print(bruh.spellbook)
+APP = EQParser(sys.argv)
+print(config.data)
