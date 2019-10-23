@@ -26,6 +26,7 @@ class LogReader(QFileSystemWatcher):
     def __init__(self,dir):
         super().__init__()
         self.logfiles = glob(os.path.join(dir, 'eqlog*.txt'))
+        print(self.logfiles)
         self.filesys_watcher = QFileSystemWatcher(self.logfiles)
         self.filesys_watcher.fileChanged.connect(self.file_changed)
         self.stats = {
@@ -40,9 +41,11 @@ class LogReader(QFileSystemWatcher):
                 self.stats['log_file'] = changed_file
                 log.seek(0, os.SEEK_END)
                 self.stats['last_read'] = log.tell()
+                print(self.stats['last_read'])
             try:
                 log.seek(self.stats['last_read'], os.SEEK_SET)
                 lines = log.readlines()
+                print(lines)
                 self.stats['last_read'] = log.tell()
                 for line in lines:
                     self.new_line.emit((
@@ -60,17 +63,17 @@ class EQParser(QApplication):
         super().__init__(*args)
         self.toggled = False
         self.log_reader = None
-        parser_window = spellParser.SpellParser()
-
+        self.parser_window = spellParser.SpellParser()
+        self.toggle_parser()
 
     def toggle_parser(self):
-        if not self.toggled:
-            self.log_reader = LogReader(config.data['general']['eq_log_dir'])
-            self.log_reader.new_line.connect(self.parse)
+
+        self.log_reader = LogReader(config.data['general']['eq_log_dir'])
+        self.log_reader.new_line.connect(self.parse)
 
     def parse(self, new_line):
-        if new_line:
-            timestamp, text = new_line
+        timestamp, text = new_line
+        self.parser_window.parse(timestamp, text)
 
 
 def ParserWindow(QFrame):

@@ -10,14 +10,14 @@ class SpellParser():
         global gui
         gui = QFrame()
         self.fucked = True
+        self.toggled = False
         self.name = 'Spell Parser'
         gui.setWindowTitle(self.name)
         gui.resize(300, 420)
         self.setup_ui()
+        self.spell_book = create_spell_book()
 
     def setup_ui(self):
-
-
         listview = QListView(gui)
         listview.setGeometry(QRect(20, 20, 260, 330))
         listview.setObjectName('Spell Info')
@@ -25,6 +25,7 @@ class SpellParser():
         spinbox.setGeometry(222, 370, 60, 30)
         spinbox.setMinimum(1)
         spinbox.setMaximum(60)
+        spinbox.setPrefix('lvl: ')
         spinbox.setObjectName('lvl')
 
 
