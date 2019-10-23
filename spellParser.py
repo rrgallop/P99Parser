@@ -1,114 +1,94 @@
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QRect
 from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QLabel,
-                             QPushButton, QVBoxLayout, QWidget, QScrollArea, QSpinBox)
+                             QPushButton, QVBoxLayout, QWidget, QScrollArea, QSpinBox, QListView)
 import config
 
 
-class ParserWindow(QFrame):
+class SpellParser():
     def __init__(self):
         super().__init__()
-        self.name = ''
-        self.setObjectName('ParserWindow')
-        self.setWindowOpacity(1)
-        self.content = QVBoxLayout()
-        self.content.setContentsMargins(0, 0, 0, 0)
-        self.content.setSpacing(0)
-        self.setLayout(self.content)
-        self._menu = QWidget()
-        self._menu_content = QHBoxLayout()
-        self._menu_content.setSpacing(5)
-        self._menu_content.setContentsMargins(3, 0, 0, 0)
-        self.content.addWidget(self._menu, 0)
+        global gui
+        gui = QFrame()
+        self.fucked = True
+        self.name = 'Spell Parser'
+        gui.setWindowTitle(self.name)
+        gui.resize(300, 420)
+        self.setup_ui()
 
-        self._title = QLabel()
-        self._title.setObjectName('ParserWindowTitle')
-
-        button = QPushButton(u'\u2637')  # unicode char ☷
-        button.setObjectName('ParserWindowMoveButton')
-        self._menu_content.addWidget(button, 0)
-
-        menu_area = QWidget()
-        menu_area.setObjectName('ParserWindowMenu')
-        self.menu_area = QHBoxLayout()
-        self._menu_content.addWidget(menu_area, 0)
-        self._menu.setVisible(False)
-
-        button.clicked.connect(self._toggle_frame)
-
-    def set_flags(self):
-        self.setFocus()
-        self.setWindowFlags(
-            Qt.FramelessWindowHint |
-            Qt.WindowStaysOnTopHint |
-            Qt.WindowCloseButtonHint |
-            Qt.WindowMinMaxButtonsHint
-        )
-
-        self.show()
-
-    def _toggle_frame(self):
-        current_geometry = self.geometry()
-        if bool(self.windowFlags() & Qt.FramelessWindowHint):
-            self.setWindowFlags(
-                Qt.WindowCloseButtonHint |
-                Qt.WindowMinMaxButtonsHint
-            )
-            self.setGeometry(current_geometry)
-            self.show()
-        else:
-            self.setWindowFlags(
-                Qt.FramelessWindowHint |
-                Qt.WindowStaysOnTopHint
-            )
-            self.setGeometry(current_geometry)
-            self.show()
-        g = self.geometry()
-
-    def set_title(self, title):
-        self._title.setText(title)
-
-    def toggle(self, _=None):
-        if self.isVisible():
-            self.hide()
-            config.data['spells']['toggled'] = False
-        else:
-            self.set_flags()
-            self.show()
-            config.data['spells']['toggled'] = True
-        config.save()
+    def setup_ui(self):
 
 
-    def closeEvent(self, _):
+        listview = QListView(gui)
+        listview.setGeometry(QRect(20, 20, 260, 330))
+        listview.setObjectName('Spell Info')
+        spinbox = QSpinBox(gui)
+        spinbox.setGeometry(222, 370, 60, 30)
+        spinbox.setMinimum(1)
+        spinbox.setMaximum(60)
+        spinbox.setObjectName('lvl')
+
+
+
+
+        menu_content = QHBoxLayout()
+        menu_content.setSpacing(5)
+        menu_content.setContentsMargins(3,0,0,0)
+        # layout.addWidget(menu_content)
+
+        gui.show()
+
+    def parse(self, timestamp, text):
+        if text[:17] == 'You begin casting':
+            print("We got one boys!")
+
+    def toggle(self):
         pass
 
 
-class Spells(ParserWindow):
-    def __init__(self):
-        super().__init__()
-        self.name = 'spellwindow'
-        self.setWindowTitle(self.name.title())
-        self.set_title(self.name.title())
+class Spell:
+    def __init__(self, **kwargs):
+        self.id = 0
+        self.name = ''
+        self.effect_string_you = ''
+        self.effect_string_other = ''
+        self.effect_string_worn_off = ''
+        self.aoe_range = 0
+        self.max_targets = 1
+        self.cast_time = 0
+        self.resist_type = 0
+        self.duration_formula = 0
+        self.pvp_duration_formula = 0
+        self.duration = 0
+        self.pvp_duration = 0
+        self.type = 0
+        self.spell_icon = 0
+        self.__dict__.update(kwargs)
 
-    def setup_ui(self):
-        self.setMinimumWidth(150)
-        self.spell_container = SpellContainer()
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setWidget(self.spell_container)
-        self.scroll_area.setObjectName('SpellScrollArea')
-        self.content.addWidget(self.scroll_area, 1)
-        self.level_widget = QSpinBox()
-        self.level_widget.setRange(1, 60)
-        self.level_widget.setPrefix('lvl ')
-        self.menu_area.addWidget(self.level_widget, 0)
-
-
-
-
-class SpellContainer(QFrame):
-    def __init__(self):
-        super().__init__()
-        self.setLayout(QVBoxLayout)
-        self.setObjectName('SpellContainer')
-        self.layout().setContentsMargins(0, 0, 0, 0)
-        self.layout().addStretch(1)
+def create_spell_book():
+    """
+    Spell information is stored locally in spells_us.txt
+    This method will parse the spell file to extract spell information
+    For use in detection string etc
+    """
+    spellbook = {}
+    with open('spells_us.txt') as spellz:
+        for line in spellz:
+            values = line.strip().split('^')
+            spellbook[values[1]] = Spell(
+                id=int(values[0]),
+                name=values[1].lower(),
+                effect_on_you=values[6],
+                effect_text_other=values[7],
+                effect_text_worn_off=values[8],
+                aoe_range=int(values[10]),
+                max_targets=(6 if int(values[10]) > 0 else 1),
+                cast_time=int(values[13]),
+                resist_type=int(values[85]),
+                duration_formula=int(values[16]),
+                pvp_duration_formula=int(values[181]),
+                duration=int(values[17]),
+                pvp_duration=int(values[182]),
+                type=int(values[83]),
+                spell_icon=int(values[144])
+            )
+        return spellbook
