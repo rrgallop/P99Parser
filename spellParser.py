@@ -1,6 +1,6 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QLabel,
-                             QPushButton, QVBoxLayout, QWidget)
+                             QPushButton, QVBoxLayout, QWidget, QScrollArea, QSpinBox)
 import config
 
 
@@ -80,3 +80,35 @@ class ParserWindow(QFrame):
 
     def closeEvent(self, _):
         pass
+
+
+class Spells(ParserWindow):
+    def __init__(self):
+        super().__init__()
+        self.name = 'spellwindow'
+        self.setWindowTitle(self.name.title())
+        self.set_title(self.name.title())
+
+    def setup_ui(self):
+        self.setMinimumWidth(150)
+        self.spell_container = SpellContainer()
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setWidget(self.spell_container)
+        self.scroll_area.setObjectName('SpellScrollArea')
+        self.content.addWidget(self.scroll_area, 1)
+        self.level_widget = QSpinBox()
+        self.level_widget.setRange(1, 60)
+        self.level_widget.setPrefix('lvl ')
+        self.menu_area.addWidget(self.level_widget, 0)
+
+
+
+
+class SpellContainer(QFrame):
+    def __init__(self):
+        super().__init__()
+        self.setLayout(QVBoxLayout)
+        self.setObjectName('SpellContainer')
+        self.layout().setContentsMargins(0, 0, 0, 0)
+        self.layout().addStretch(1)
