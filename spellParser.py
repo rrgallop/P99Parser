@@ -34,23 +34,32 @@ class SpellParser():
     def reset_spell_trigger(self):
         self.triggered_spell_holder = None
 
+    def triggered_spell_handler(self):
+        """
+        Triggered once spell casting is complete to handle next steps
+        :return:
+        """
+        print("Heard the signal, now reset the parser")
+        self.reset_spell_trigger()
+
     def parse(self, timestamp, text):
 
         # spell is triggered, waiting for casting to complete
         if self.triggered_spell_holder is not None:
             self.triggered_spell_holder.parse(timestamp, text)
-            self.reset_spell_trigger()  # set triggered_spell back to None
 
         # player starts casting, we set up the spell trigger
         if text[:17] == 'You begin casting':
             spell = self.spell_book.get(text[18:-1], None)
-            if spell is not None and spell.duration_formula != 0:
+            if spell is not None and spell.duration_formula != 0:  # only buffs/debuffs/DoTs
                 triggered_spell = TriggeredSpell(
                     spell=spell,
                     timestamp=timestamp
                 )
+                triggered_spell.triggered_spell_signal.connect(self.triggered_spell_handler)
                 self.triggered_spell_holder = triggered_spell
                 print("Casting "+triggered_spell.spell.name)
+
 
 
     # def spell_triggered_handler(self):
@@ -81,7 +90,7 @@ class Spell:
         self.__dict__.update(kwargs)
 
 
-class TriggeredSpell():
+class TriggeredSpell(QObject):
 
     """
     Here I store the spell information along with the time it was cast together in the same object.
@@ -89,14 +98,15 @@ class TriggeredSpell():
 
     """
 
-    # signal used to notify handler function when changes have occured to this spell
-    # such as duration, spell expired, spell refreshed, whatever else I can think of...
-    #  triggered_spell_signal = pyqtSignal()
+    # signals spell is active to the parser
+    triggered_spell_signal = pyqtSignal()
 
     def __init__(self, **kwargs):
+        super().__init__()
         self.datetime = None
         self.spell = None
-        self.spell_targets = None
+        self.spell_targets = []
+        self.active = False
         self.effect_expired = False
         self.__dict__.update(kwargs)
 
@@ -117,14 +127,20 @@ class TriggeredSpell():
         if self.spell.effect_text_you == text[:len(self.spell.effect_text_you)]:
             print("You cast it on yourself")
             self.spell_targets.append((timestamp, 'yourself'))
+
         elif self.spell.effect_text_other == text[(len(text) - len(self.spell.effect_text_other)):]:
             print("You cast it on someone else")
+            target = text[:len(text) - len(self.spell.effect_text_other)].strip()
+            self.spell_targets.append((timestamp, target))
 
-        if self.targets is not None:
-            pass
+        if self.spell_targets:
+            print("Spell active! Ready to parse. Targets:")
+            print(self.spell_targets)
+            self.triggered_spell_signal.emit()
 
     def set_as_expired(self):
         self.effect_expired = True
+
 
 def create_spell_book():
     """
