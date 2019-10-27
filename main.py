@@ -15,9 +15,6 @@ config_file = r'config.json'
 config.load(config_file)
 
 def strip_timestamp(line):
-    """
-    Strings EQ Timestamp from log entry.
-    """
     return line[line.find("]") + 1:].strip()
 
 class LogReader(QFileSystemWatcher):
@@ -41,11 +38,9 @@ class LogReader(QFileSystemWatcher):
                 self.stats['log_file'] = changed_file
                 log.seek(0, os.SEEK_END)
                 self.stats['last_read'] = log.tell()
-                print(self.stats['last_read'])
             try:
                 log.seek(self.stats['last_read'], os.SEEK_SET)
                 lines = log.readlines()
-                print(lines)
                 self.stats['last_read'] = log.tell()
                 for line in lines:
                     self.new_line.emit((
@@ -72,8 +67,9 @@ class EQParser(QApplication):
         self.log_reader.new_line.connect(self.parse)
 
     def parse(self, new_line):
-        timestamp, text = new_line
-        self.parser_window.parse(timestamp, text)
+        if new_line:
+            timestamp, text = new_line
+            self.parser_window.parse(timestamp, text)
 
 
 def ParserWindow(QFrame):
