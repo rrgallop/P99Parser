@@ -1,7 +1,10 @@
 from PyQt5.QtCore import Qt, QRect, pyqtSignal, QObject, QTimer
-from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QLabel,
+from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QLabel, QProgressBar,
                              QPushButton, QVBoxLayout, QWidget, QScrollArea, QSpinBox, QListView)
 import config
+import datetime
+import math
+import string
 
 
 class SpellParser():
@@ -9,25 +12,44 @@ class SpellParser():
         super().__init__()
         global gui
         gui = QFrame()
+        self.layout = QVBoxLayout(gui)
+        self.menu = QWidget(gui)
+        self.menu_content = QHBoxLayout(gui)
+        self.scroll_area = QScrollArea(gui)
+        self.title = QLabel(gui)
+        self.lvlspinner = QSpinBox(gui)
+        self.spell_countdown = SpellGUIContainer()
         self.toggled = False
         self.name = 'Spell Parser'
-
+        gui.setWindowTitle(self.name)
         self.setup_ui()
         self.spell_book = create_spell_book()
         self.triggered_spell_holder = None  # will hold created TriggeredSpell objects defined below
 
     def setup_ui(self):
-        gui.setWindowTitle(self.name)
-        gui.resize(300, 420)
-        listview = QListView(gui)
-        listview.setGeometry(QRect(20, 20, 260, 330))
-        listview.setObjectName('Spell Info')
-        spinbox = QSpinBox(gui)
-        spinbox.setGeometry(222, 370, 60, 30)
-        spinbox.setMinimum(1)
-        spinbox.setMaximum(60)
-        spinbox.setPrefix('lvl: ')
-        spinbox.setObjectName('lvl')
+        """
+        Set up GUI elements defined above. Listed here for reference.
+        layout = QVBoxLayout()
+        menu = QWidget()
+        menu_content = QHBoxLayout()
+        title = QLabel()
+        scroll_area = QScrollArea()
+        lvlspinner = QSpinBox()
+        spell_countdown = SpellCountdownContainer() defined below
+        :return:
+        """
+        gui.setMinimumWidth(200)
+        gui.setLayout(self.layout)
+        self.menu.setLayout(self.menu_content)
+        self.menu_content.setSpacing(5)
+        self.layout.addWidget(self.menu, 0)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setWidget(self.spell_countdown)
+        self.scroll_area.setObjectName('SpellScrollArea')
+        self.layout.addWidget(self.scroll_area, 1)
+        self.lvlspinner.setRange(1, 60)
+        self.lvlspinner.setPrefix('level: ')
+        self.layout.addWidget(self.lvlspinner)
 
         gui.show()
 
@@ -39,8 +61,12 @@ class SpellParser():
         Triggered once spell casting is complete to handle next steps
         :return:
         """
-        print("Heard the signal, now reset the parser")
+        print("Heard the signal, now reset the parser...")
+        for target in self.triggered_spell_holder.spell_targets:
+            print(target)
+            self.spell_countdown.add_spell(self.triggered_spell_holder.spell, target[0], target[1])
         self.reset_spell_trigger()
+        print("success")
 
     def parse(self, timestamp, text):
 
@@ -60,14 +86,177 @@ class SpellParser():
                 self.triggered_spell_holder = triggered_spell
                 print("Casting "+triggered_spell.spell.name)
 
+        elif (self.triggered_spell_holder and
+              text[:26] == 'Your spell is interrupted.' or
+              text[:20] == 'Your target resisted' or
+              text[:29] == 'Your spell did not take hold.' or
+              text[:26] == 'You try to cast a spell on'):
+            self.reset_spell_trigger()
+            print("**Failed cast**")
 
 
-    # def spell_triggered_handler(self):
-    #     if self.triggered_spell_holder:
-    #         self.
+class SpellGUIContainer(QFrame):
+    """Countdown element of GUI. Tracks duration of active spells"""
+    def __init__(self):
+        super().__init__()
+        self.setLayout(QVBoxLayout(gui))
+        self.layout().setContentsMargins(0, 0, 0, 0)
+        self.setObjectName('CountdownElement')
 
-    def toggle(self):
+    def add_spell(self, spell, timestamp, target):
+        spell_target = None
+        new = False
+        print('Adding spell for '+target)
+        for st in self.findChildren(SpellTarget):
+            print(st)
+            if st.title == target:
+                spell_target = st
+                self.layout().addWidget(spell_target, 0)
+        if not spell_target:
+            new = True
+            spell_target = SpellTarget(target=target)
+            self.layout().addWidget(spell_target, 0)
+        spell_target.add_spell(spell, timestamp)
+
+
+class SpellTarget(QFrame):
+
+    def __init__(self, target='yourself'):
+        super().__init__()
+        self.title = target
+        self.setObjectName('SpellTarget')
+        self.target_label = QLabel(self.title.title())
+        self.setup_ui()
+
+    def setup_ui(self):
+        self.setLayout(QVBoxLayout(gui))
+
+        self.target_label.setObjectName('SpellTargetLabel')
+        self.target_label.setMaximumHeight(20)
+        #self.setFixedHeight(30)
+
+        self.layout().addWidget(self.target_label, 1)
+
+    def add_spell(self, spell, timestamp):
+        recast = False
+        for scw in self.findChildren(SpellCountdownWidget):
+            if scw.spell.name == spell.name:
+                recast = True
+        if not recast:
+            self.layout().addWidget(SpellCountdownWidget(spell, timestamp))
+
+
+class SpellCountdownWidget(QFrame):
+
+    def __init__(self, spell, timestamp):
+        super().__init__()
+        self.setObjectName('SpellCountdownWidget')
+        self.spell = spell
+        self.progress = QProgressBar(gui)
+        self.progress.setMinimumHeight(80)
+        self.calculate(timestamp)
+        self.setup_ui()
+        self.setProperty('Warning', False)
+
+    def setup_ui(self):
+
+        layout = QHBoxLayout(gui)
+        self.setLayout(layout)
+        progress_layout = QHBoxLayout(self.progress)
+        self.name_label = QLabel(self.spell.name, self.progress)
+        self.name_label.setObjectName('CountdownNameLabel')
+        progress_layout.addWidget(self.name_label)
+        self.time_label = QLabel('', self.progress)
+        self.time_label.setObjectName('CountdownTimeLabel')
+        progress_layout.addWidget(self.time_label)
+        layout.addWidget(self.progress, 0)
+        self.update()
+
+    def calculate(self, timestamp):
+        self.ticks_remaining = get_spell_duration(self.spell)
+        self.seconds_remaining = (int(self.ticks_remaining * 6))
+        print('k')
+        self.end_time = timestamp + datetime.timedelta(seconds=self.seconds_remaining)
+        print(self.end_time)
+        self.progress.setMaximum(self.seconds_remaining)
+        print('okokok')
+
+    def update(self):
+
+        time_remaining = self.end_time - datetime.datetime.now()
+        remaining_seconds = time_remaining.total_seconds()
+        self.progress.setValue(time_remaining.seconds)
+        self.progress.update()
+        if remaining_seconds <= 0:
+            # Remove
+            self.setParent(None)
+            self.deleteLater()
+        QTimer.singleShot(1000, self.update)
+
+
+def get_spell_duration(spell, level=7):
+    formula = spell.duration_formula
+    duration = spell.duration
+
+    spell_ticks = 0
+    print ('good')
+    print(formula)
+    print(duration)
+    if formula == 0:
         pass
+    elif formula == 1:
+        spell_ticks = int(math.ceil(level / float(2.0)))
+        if spell_ticks > duration:
+            spell_ticks = duration
+    elif formula == 2:
+        spell_ticks = int(math.ceil(level / float(5.0)*3))
+    elif formula == 3:
+        spell_ticks = int(level*30)
+        if spell_ticks > duration:
+            spell_ticks = duration
+    elif formula == 4:
+        if duration == 0:
+            spell_ticks = 50
+    elif formula == 5:
+        spell_ticks = duration
+        if spell_ticks == 0:
+            spell_ticks = 3
+    elif formula == 6:
+        spell_ticks = int(math.ceil(level / float(2.0)))
+        if spell_ticks > duration:
+            spell_ticks = duration
+    elif formula == 7:
+        spell_ticks = level
+        if spell_ticks > duration:
+            spell_ticks = duration
+    elif formula == 8:
+        spell_ticks = level + 10
+        if spell_ticks > duration:
+            spell_ticks = duration
+    elif formula == 9:
+        spell_ticks = int((level * 2) + 10)
+        if spell_ticks > duration:
+            spell_ticks = duration
+    elif formula == 10:
+        spell_ticks = int(level * 3 + 10)
+        if spell_ticks > duration:
+            spell_ticks = duration
+    elif formula == 11:
+        spell_ticks = duration
+    elif formula == 12:
+        spell_ticks = duration
+    elif formula == 15:
+        spell_ticks = duration
+    elif formula == 50:
+        spell_ticks = 72000
+    elif formula == 3600:
+        if duration == 0:
+            spell_ticks = 3600
+        else:
+            spell_ticks = duration
+
+    print('Spell ticks calculated to be: ' +str(spell_ticks))
+    return spell_ticks
 
 
 class Spell:
