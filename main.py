@@ -18,6 +18,9 @@ def strip_timestamp(line):
     return line[line.find("]") + 1:].strip()
 
 class LogReader(QFileSystemWatcher):
+    """
+    Monitors the logfiles in the given directory, detecting any changes that occur to the files.
+    """
     new_line = pyqtSignal(object)
 
     def __init__(self,dir):
@@ -25,6 +28,8 @@ class LogReader(QFileSystemWatcher):
         self.logfiles = glob(os.path.join(dir, 'eqlog*.txt'))
         print(self.logfiles)
         self.filesys_watcher = QFileSystemWatcher(self.logfiles)
+
+        # fileChanged signal is emitted when a file is changed, triggering connected function
         self.filesys_watcher.fileChanged.connect(self.file_changed)
         self.stats = {
             'log_file': '',
@@ -32,6 +37,11 @@ class LogReader(QFileSystemWatcher):
         }
 
     def file_changed(self, changed_file):
+        """
+        Triggered when a change is detected in a file.
+        Reads the line of the file and extracts it for further parsing.
+        :param changed_file: location of the changed file
+        """
         with open(changed_file) as log:
 
             if changed_file != self.stats['log_file']:
@@ -54,6 +64,10 @@ class LogReader(QFileSystemWatcher):
 
 
 class EQParser(QApplication):
+    """
+    Parent application of parser windows
+    (currently only SpellParser)
+    """
     def __init__(self, *args):
         super().__init__(*args)
         self.toggled = False
@@ -62,7 +76,9 @@ class EQParser(QApplication):
         self.toggle_parser()
 
     def toggle_parser(self):
-
+        """
+        Activates, and eventually, deactivates the LogReader as necessary
+        """
         self.log_reader = LogReader(config.data['general']['eq_log_dir'])
         self.log_reader.new_line.connect(self.parse)
 
@@ -72,24 +88,8 @@ class EQParser(QApplication):
             self.parser_window.parse(timestamp, text)
 
 
-def ParserWindow(QFrame):
-    def __init__(self):
-        super().__init__()
-        self.name = ''
-        self.setObjectName('ParserWindow')
-        self.setWindowOpacity(1)
-
-
-
-
-
-
-
 APP = EQParser(sys.argv)
-APP.setStyleSheet(open('_.css').read())
-APP.setWindowIcon(QIcon('data/ui/icon.png'))
 APP.setQuitOnLastWindowClosed(True)
 APP.setAttribute(Qt.AA_EnableHighDpiScaling)
-QFontDatabase.addApplicationFont('NotoSans-Regular.ttf')
-QFontDatabase.addApplicationFont('NotoSans-Bold.ttf')
+
 APP.exec_()

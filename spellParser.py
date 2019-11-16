@@ -1,4 +1,4 @@
-from PyQt5.QtCore import Qt, QRect, pyqtSignal, QObject, QTimer
+from PyQt5.QtCore import Qt, QRect, pyqtSignal, QObject, QTimer, QEvent
 from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QLabel, QProgressBar,
                              QPushButton, QVBoxLayout, QWidget, QScrollArea, QSpinBox, QListView)
 import config
@@ -8,6 +8,9 @@ import string
 
 
 class SpellParser():
+    """
+    Manages top-level gui object. Parent of all other widgets defined below.
+    """
     def __init__(self):
         super().__init__()
         global gui
@@ -18,7 +21,7 @@ class SpellParser():
         self.scroll_area = QScrollArea(gui)
         self.title = QLabel(gui)
         self.lvlspinner = QSpinBox(gui)
-        self.spell_countdown = SpellGUIContainer()
+        self.spell_countdown = SpellContainerWidget()
         self.toggled = False
         self.name = 'Spell Parser'
         gui.setWindowTitle(self.name)
@@ -95,8 +98,10 @@ class SpellParser():
             print("**Failed cast**")
 
 
-class SpellGUIContainer(QFrame):
-    """Countdown element of GUI. Tracks duration of active spells"""
+class SpellContainerWidget(QFrame):
+    """
+    GUI Element that stores active spells, organized by spell target
+    """
     def __init__(self):
         super().__init__()
         self.setLayout(QVBoxLayout(gui))
@@ -107,19 +112,22 @@ class SpellGUIContainer(QFrame):
         spell_target = None
         new = False
         print('Adding spell for '+target)
-        for st in self.findChildren(SpellTarget):
+        for st in self.findChildren(SpellTargetWidget):
             print(st)
             if st.title == target:
                 spell_target = st
                 self.layout().addWidget(spell_target, 0)
         if not spell_target:
             new = True
-            spell_target = SpellTarget(target=target)
+            spell_target = SpellTargetWidget(target=target)
             self.layout().addWidget(spell_target, 0)
         spell_target.add_spell(spell, timestamp)
 
 
-class SpellTarget(QFrame):
+class SpellTargetWidget(QFrame):
+    """
+    Child element of SpellGUIContainer. Displays the name of the spell's target.
+    """
 
     def __init__(self, target='yourself'):
         super().__init__()
@@ -130,30 +138,51 @@ class SpellTarget(QFrame):
 
     def setup_ui(self):
         self.setLayout(QVBoxLayout(gui))
-
         self.target_label.setObjectName('SpellTargetLabel')
-        self.target_label.setMaximumHeight(20)
-        #self.setFixedHeight(30)
-
+        self.setFixedHeight(80)
         self.layout().addWidget(self.target_label, 1)
 
     def add_spell(self, spell, timestamp):
+        """
+        Identify the cast spell and add it to the GUI after calculating the timestamp
+        :param spell: Spell object representing the detected spell that was cast
+        :param timestamp: Datetime object used to calculate spell duration.
+        """
         recast = False
-        for scw in self.findChildren(SpellCountdownWidget):
-            if scw.spell.name == spell.name:
+        # cycle through active spells to detect recasts
+        for _ in self.findChildren(SpellCountdownWidget):
+            if _.spell.name == spell.name:
                 recast = True
+                _.calculate(timestamp)  # recalculate spell duration
         if not recast:
             self.layout().addWidget(SpellCountdownWidget(spell, timestamp))
 
+    def childEvent(self, event):
+        """
+        Signal is emitted when child widget is removed.
+        If signal is detected by parent, and no children remain, delete the GUI element.
+        :param event:
+        """
+        if event.type() == QEvent.ChildRemoved:
+            if type(event.child()) == SpellCountdownWidget:
+                if not self.findChildren(SpellCountdownWidget):
+                    self.setParent(None)
+                    self.deleteLater()
+        event.accept()
+
 
 class SpellCountdownWidget(QFrame):
+    """
+    Child element of SpellTargetWidget. Shows the name of the spell,
+    and tracks its duration
+    """
 
     def __init__(self, spell, timestamp):
         super().__init__()
         self.setObjectName('SpellCountdownWidget')
         self.spell = spell
         self.progress = QProgressBar(gui)
-        self.progress.setMinimumHeight(80)
+        self.progress.setMinimumHeight(30)
         self.calculate(timestamp)
         self.setup_ui()
         self.setProperty('Warning', False)
@@ -173,16 +202,21 @@ class SpellCountdownWidget(QFrame):
         self.update()
 
     def calculate(self, timestamp):
+        """
+        Calculates spell duration in seconds.
+        :param timestamp: Datetime object representing when spell was cast
+        :return:
+        """
         self.ticks_remaining = get_spell_duration(self.spell)
         self.seconds_remaining = (int(self.ticks_remaining * 6))
-        print('k')
         self.end_time = timestamp + datetime.timedelta(seconds=self.seconds_remaining)
         print(self.end_time)
         self.progress.setMaximum(self.seconds_remaining)
-        print('okokok')
 
     def update(self):
-
+        """
+        Updates progress bar with new time remaining
+        """
         time_remaining = self.end_time - datetime.datetime.now()
         remaining_seconds = time_remaining.total_seconds()
         self.progress.setValue(time_remaining.seconds)
@@ -195,13 +229,16 @@ class SpellCountdownWidget(QFrame):
 
 
 def get_spell_duration(spell, level=7):
+    """
+    Method used to parse raw duration into spell ticks, with each tick being roughly 6 seconds.
+    :param spell: The Spell object representing the spell being cast.
+    :param level: Your character's level.
+    :return: spell's duration in ticks
+    """
     formula = spell.duration_formula
     duration = spell.duration
 
     spell_ticks = 0
-    print ('good')
-    print(formula)
-    print(duration)
     if formula == 0:
         pass
     elif formula == 1:
@@ -260,6 +297,10 @@ def get_spell_duration(spell, level=7):
 
 
 class Spell:
+    """
+    Parsed spell data from spells_us.txt is stored as a Spell object.
+    This serves as my internal representation of a spell.
+    """
     def __init__(self, **kwargs):
         self.id = 0
         self.name = ''
@@ -335,7 +376,11 @@ def create_spell_book():
     """
     Spell information is stored locally in spells_us.txt
     This method will parse the spell file to extract spell information
-    For use in detection string etc
+    The spell file contains all information describing the spells in the game.
+    Information parsed then can be used to determine what spell is being cast,
+    and then calculate its duration.
+    Spells that are read in are stored as a Spell object, defined above.
+    :returns: spellbook, a dictionary of spells, organized by spell name.
     """
     spellbook = {}
     with open('spells_us.txt') as spellz:
